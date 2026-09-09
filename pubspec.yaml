@@ -60,6 +60,9 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/images/
+    - assets/images/backgrounds/
+    - assets/ui/panels/
     - assets/audio/music/worlds/
     - assets/audio/sfx/
     - assets/audio/voice/
