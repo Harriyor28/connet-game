@@ -1,0 +1,193 @@
+workflows:
+  android-release:
+    name: Nexus Link Android Release
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      flutter: stable
+      java: 17
+      groups:
+        - android_release
+        - admob_production
+      android_signing:
+        - nexus_link_keystore
+      vars:
+        NEXUS_LINK_ENV: production
+
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+        - pattern: release/*
+          include: true
+          source: true
+
+    scripts:
+      - name: Check Flutter environment
+        script: |
+          flutter --version
+          dart --version
+
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+
+      - name: Analyze project
+        script: |
+          flutter analyze
+
+      - name: Run tests
+        script: |
+          flutter test
+
+      - name: Build Android App Bundle
+        script: |
+          flutter build appbundle \
+            --release \
+            --dart-define=NEXUS_LINK_ENV=$NEXUS_LINK_ENV
+
+      - name: Build Android APK
+        script: |
+          flutter build apk \
+            --release \
+            --dart-define=NEXUS_LINK_ENV=$NEXUS_LINK_ENV
+
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - $CM_RECIPIENT_EMAIL
+        notify:
+          success: true
+          failure: true
+
+  ios-release:
+    name: Nexus Link iOS Release
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      flutter: stable
+      groups:
+        - ios_release
+        - admob_production
+      vars:
+        NEXUS_LINK_ENV: production
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.connectpuzzle.nexusLink
+
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+        - pattern: release/*
+          include: true
+          source: true
+
+    scripts:
+      - name: Check Flutter environment
+        script: |
+          flutter --version
+          dart --version
+
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios
+          pod install --repo-update
+          cd ..
+
+      - name: Analyze project
+        script: |
+          flutter analyze
+
+      - name: Run tests
+        script: |
+          flutter test
+
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa \
+            --release \
+            --export-options-plist=/Users/builder/export_options.plist \
+            --dart-define=NEXUS_LINK_ENV=$NEXUS_LINK_ENV
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+
+    publishing:
+      email:
+        recipients:
+          - $CM_RECIPIENT_EMAIL
+        notify:
+          success: true
+          failure: true
+
+  development-build:
+    name: Nexus Link Development APK
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+
+    environment:
+      flutter: stable
+      vars:
+        NEXUS_LINK_ENV: development
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: develop
+          include: true
+          source: true
+
+    scripts:
+      - name: Check Flutter environment
+        script: |
+          flutter --version
+          dart --version
+
+      - name: Install dependencies
+        script: |
+          flutter pub get
+
+      - name: Analyze project
+        script: |
+          flutter analyze
+
+      - name: Run tests
+        script: |
+          flutter test
+
+      - name: Build development APK
+        script: |
+          flutter build apk \
+            --debug \
+            --dart-define=NEXUS_LINK_ENV=$NEXUS_LINK_ENV
+
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - $CM_RECIPIENT_EMAIL
+        notify:
+          success: true
+          failure: true
