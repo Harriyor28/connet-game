@@ -47,6 +47,11 @@ android {
 
     buildTypes {
         release {
+            // TESTING: disable R8 minify to avoid WorkManager/Room obfuscation crash
+            // (java.lang.RuntimeException: Failed to create an instance of androidx.work.impl.WorkDatabase)
+            // For production you can enable minify with proper keep rules.
+            isMinifyEnabled = false
+            isShrinkResources = false
             // Use release signing if key.properties is present, otherwise fall back to debug
             // so the APK is still installable for sideload/testing. For Play Store you MUST supply a real keystore.
             signingConfig = if (keystorePropertiesFile.exists()) {
