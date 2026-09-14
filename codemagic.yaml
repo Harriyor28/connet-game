@@ -1,13 +1,15 @@
 workflows:
 
   # ==========================================================
-  # ANDROID
-  # Builds:
-  #   - AAB for Google Play
-  #   - APK for device testing
+  # ANDROID - TESTING ONLY (SIDELOAD)
+  # This workflow is for testing on your phone/tablet via APK.
+  # It uses a temporary debug keystore so the APK is installable.
+  # NOT FOR GOOGLE PLAY - Play Store requires a real upload keystore.
+  # When ready for production, uncomment the PRODUCTION block below
+  # and set CM_* variables in Codemagic UI.
   # ==========================================================
   android-release:
-    name: Connect 3D Android Release
+    name: Connect 3D Android Testing
     max_build_duration: 60
     instance_type: mac_mini_m2
 
@@ -28,17 +30,51 @@ workflows:
         script: |
           flutter test
 
-      - name: Build Android App Bundle
+      - name: Set up debug keystore (TESTING ONLY)
         script: |
-          flutter build appbundle --release
+          echo "TESTING MODE: generating temporary debug keystore"
+          echo "This APK is signed with debug key - installable via sideload but NOT for Play Store"
+          keytool -genkeypair -v \
+            -keystore /tmp/debug-keystore.jks \
+            -alias debug \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Debug, OU=Debug, O=Debug, L=Debug, S=Debug, C=US"
+          cat > "$FCI_BUILD_DIR/android/key.properties" <<EOF
+          storeFile=/tmp/debug-keystore.jks
+          storePassword=android
+          keyAlias=debug
+          keyPassword=android
+          EOF
+          cat "$FCI_BUILD_DIR/android/key.properties"
+          # --- PRODUCTION (enable later) ---
+          # 1. Create upload keystore locally: keytool -genkeypair -v -keystore upload-keystore.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
+          # 2. base64 -w 0 upload-keystore.jks > keystore.b64
+          # 3. In Codemagic UI > Environment variables (Secure): add CM_KEYSTORE, CM_KEYSTORE_PASSWORD, CM_KEY_ALIAS, CM_KEY_PASSWORD
+          # 4. Replace this script with:
+          # echo $CM_KEYSTORE | base64 --decode > /tmp/keystore.jks
+          # cat > "$FCI_BUILD_DIR/android/key.properties" <<EOF
+          # storeFile=/tmp/keystore.jks
+          # storePassword=$CM_KEYSTORE_PASSWORD
+          # keyAlias=$CM_KEY_ALIAS
+          # keyPassword=$CM_KEY_PASSWORD
+          # EOF
 
-      - name: Build Android APK
+      - name: Build APK for testing (installable)
         script: |
           flutter build apk --release
+          # Also build split APKs for smaller size (optional)
+          flutter build apk --release --split-per-abi
+          ls -lh build/app/outputs/flutter-apk/
+
+      # DISABLED FOR TESTING: AAB is only needed for Play Store upload
+      # - name: Build Android App Bundle (PRODUCTION - enable later)
+      #   script: |
+      #     flutter build appbundle --release
 
     artifacts:
-      - build/app/outputs/bundle/release/*.aab
       - build/app/outputs/flutter-apk/*.apk
+      # - build/app/outputs/bundle/release/*.aab  # enable when switching to production
 
 
   # ==========================================================
@@ -46,8 +82,14 @@ workflows:
   # Builds:
   #   - IPA for App Store/TestFlight
   #
-  # IMPORTANT:
-  # iOS signing must be configured in Codemagic first.
+  # IMPORTANT: iOS apps MUST be signed to install on a real iPhone.
+  # You need an Apple Developer Program account ($99/yr).
+  # In Codemagic: Teams -> Codemagic Teams -> Code signing -> iOS certificates
+  #   - Add Apple Developer Portal integration OR upload .p12 + provisioning profile manually
+  #   - Or enable Automatic code signing
+  # The `xcode-project use-profiles` step will then inject signing.
+  # Without signing, the IPA will be unsigned and iOS will show:
+  # "Unable to install - integrity could not be verified" / "App is required to be signed"
   # ==========================================================
   ios-release:
     name: Connect 3D iOS Release
@@ -88,4 +130,11 @@ workflows:
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.loWhat other machines will be needed for a full shop setu
+      - /tmp/xcodebuild_logs/*.log
+
+    # Optional: auto-publish to TestFlight (requires App Store Connect API key in Codemagic)
+    # publishing:
+    #   app_store_connect:
+    #     api_key: App Store Connect API key name
+    #     key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+    #     issuer_id: $APP_STORE_CONNECT_ISSUER_ID
